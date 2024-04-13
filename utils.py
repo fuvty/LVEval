@@ -10,6 +10,9 @@ from transformers import (
 )
 
 
+from playground.models.interface import update_model_function
+from playground.attention.set import set_static_attention_lut
+
 
 def ensure_dir(directory_path):
     if not os.path.exists(directory_path):
@@ -67,18 +70,36 @@ def load_LVEval_dataset(dataset_name, data_path=None):
 
 def load_model_and_tokenizer(model_path, device):
     print(device)
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(
+    # try:
+    #     tokenizer = AutoTokenizer.from_pretrained(
+    #         model_path, trust_remote_code=True
+    #     )
+    #     model = AutoModelForCausalLM.from_pretrained(
+    #         model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.bfloat16, use_flash_attention_2=True, 
+    #     )
+    # except:
+    #     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    #     model = AutoModelForCausalLM.from_pretrained(
+    #         model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.bfloat16, use_flash_attention_2=False, 
+    #     )
+
+    tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=True
         )
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.bfloat16, use_flash_attention_2=True, 
-        )
-    except:
-        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.bfloat16, use_flash_attention_2=False, 
-        )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.float16, attn_implementation="eager"
+    )
+
+    model = update_model_function(model, model_path)
+    permute_head = True
+    sparse_decode = True
+    lut_path = ["/share/public/autofit/universal/vicuna-7b-v1.5/comprehensive/golden/lut_16384_plan_4.pt"]
+    block_size = 64
+    model.model.use_block_sparse_attention_lut(permute_head, sparse_decode)
+    print("Using lut from {}, block size {}".format(lut_path, block_size))
+    set_static_attention_lut(
+        lut_path, None, model.model.layers, block_size, permute_head, sparse_decode
+    )
 
     model = model.eval()
     return model, tokenizer

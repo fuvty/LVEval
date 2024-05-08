@@ -1,2 +1,6 @@
 outputs/
 *.pyc
+LVEval_result*
+LVEval_by_*
+multi_news_*
+comprehensive*

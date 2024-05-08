@@ -12,6 +12,7 @@ from transformers import (
 
 from playground.models.interface import update_model_function
 from playground.attention.set import set_static_attention_lut
+from playground.models.llama.modeling_llama import LlamaModel_use_streamingllm_attention
 
 
 def ensure_dir(directory_path):
@@ -68,7 +69,7 @@ def load_LVEval_dataset(dataset_name, data_path=None):
         datas = load_dataset("infini-ai/LVEval", dataset_name, split='test', token=True)
     return list(datas)
 
-def load_model_and_tokenizer(model_path, device):
+def load_model_and_tokenizer(model_path, device, lut_path=None):
     print(device)
     # try:
     #     tokenizer = AutoTokenizer.from_pretrained(
@@ -83,32 +84,45 @@ def load_model_and_tokenizer(model_path, device):
     #         model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.bfloat16, use_flash_attention_2=False, 
     #     )
 
+    # check whether lut_path exists in the file system
+    if lut_path is not None and lut_path != '' and not os.path.exists(lut_path):
+        print(f"lut_path {lut_path} does not exist")
+        raise FileNotFoundError
+
+    elif lut_path is None or lut_path == '':
+        print("lut_path is None, using raw model")
+
+    else:
+        print(f"using lut_path {lut_path}")
+    
     tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=True
         )
     model = AutoModelForCausalLM.from_pretrained(
-        model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.float16, attn_implementation="eager"
+        model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.float16, attn_implementation="eager" if lut_path is not None else "sdpa"
     )
 
     model = update_model_function(model, model_path)
     permute_head = True
     sparse_decode = True
-    lut_path = ["/share/public/autofit/universal/vicuna-7b-v1.5/comprehensive/golden/lut_16384_plan_4.pt"]
     block_size = 64
-    model.model.use_block_sparse_attention_lut(permute_head, sparse_decode)
-    print("Using lut from {}, block size {}".format(lut_path, block_size))
-    set_static_attention_lut(
-        lut_path, None, model.model.layers, block_size, permute_head, sparse_decode
-    )
+    if lut_path is not None:
+        model.model.use_block_sparse_attention_lut(permute_head, sparse_decode)
+        print("Using lut from {}, block size {}".format(lut_path, block_size))
+        set_static_attention_lut(
+            lut_path, None, model.model.layers, block_size, permute_head, sparse_decode
+        )
+
+    # LlamaModel_use_streamingllm_attention(model.model, global_size=4, band_size=4092, max_length=16384)
 
     model = model.eval()
     return model, tokenizer
 
-def load_model_and_tokenizer_once(id, model_path, device_dict=None, lock=None):
+def load_model_and_tokenizer_once(id, model_path, device_dict=None, lock=None, lut_path=None):
     device = torch.device(f"cuda:{id}") if id != -1 else "auto"
     print(f"using device {device}")
     model, tokenizer = load_model_and_tokenizer(
-        model_path, device
+        model_path, device, lut_path
     )
     if device_dict is None:
         return model, tokenizer
@@ -144,7 +158,7 @@ def build_chat(tokenizer, prompt, model_name):
         prompt = tokenizer.build_prompt(prompt)
     elif "BlueLM" in model_name:
         prompt = f"[|Human|]:{prompt}[|AI|]:"
-    elif "vicuna" in model_name or "sft" in model_name:
+    elif "vicuna" in model_name or "Vicuna" in model_name or "sft" in model_name:
         system_message = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions."
         prompt = f"{system_message} USER: {prompt} ASSISTANT:"
     elif "llama2" in model_name or "Llama-2" in model_name or "LLaMA" in model_name:
@@ -154,7 +168,7 @@ def build_chat(tokenizer, prompt, model_name):
     elif "internlm" in model_name:
         prompt = f"<|User|>:{prompt}<eoh>\n<|Bot|>:"
     else:
-        prompt = f"{prompt}"
+        raise ValueError(f"model name {model_name} not found in build_chat()")
     return prompt
 
 def post_process(response, model_name):

@@ -8,6 +8,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
 )
+from fastchat.model import get_conversation_template
 
 
 from playground.models.interface import update_model_function
@@ -132,13 +133,14 @@ def load_model_and_tokenizer_once(id, model_path, device_dict=None, lock=None, l
     else:
         device_dict[id] = (model, tokenizer)
 
-def model_generate(tokenizer, prompt, max_gen, model):
+def model_generate(tokenizer, prompt, max_gen, model, stop_token_ids=None):
     input = tokenizer(prompt, truncation=False, return_tensors="pt").to(model.device)
     context_length = input.input_ids.shape[-1]
     output = model.generate(
         **input,
         max_new_tokens=max_gen,
         do_sample=False,
+        eos_token_id=stop_token_ids,
     )[0]
     pred = tokenizer.decode(output[context_length:], skip_special_tokens=True)
     return pred
@@ -161,8 +163,15 @@ def build_chat(tokenizer, prompt, model_name):
     elif "vicuna" in model_name or "Vicuna" in model_name or "sft" in model_name:
         system_message = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions."
         prompt = f"{system_message} USER: {prompt} ASSISTANT:"
-    elif "llama2" in model_name or "Llama-2" in model_name or "LLaMA" in model_name:
+    elif "llama2" in model_name or "Llama-2" in model_name or "LLaMA-2" in model_name or "llama-2" in model_name:
         prompt = f"[INST]{prompt}[/INST]\n\n"
+    elif "llama3" in model_name or "Llama-3" in model_name or "LLaMA-3" in model_name or "llama-3" in model_name:
+        if "llama3" in model_name:
+            model_name = model_name.replace("llama3", "llama-3")
+        conv = get_conversation_template(model_name)
+        conv.append_message(conv.roles[0], prompt)
+        conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
     elif "Mistral" in model_name:
         prompt = f"<s>[INST] {prompt} [/INST]"
     elif "internlm" in model_name:

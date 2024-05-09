@@ -3,6 +3,7 @@ import re
 import torch
 import argparse
 from tqdm import tqdm
+from fastchat.model import get_conversation_template
 
 from config import (
     DATASET_MAXGEN, 
@@ -49,7 +50,14 @@ def get_pred(
             )[0]
         else: # using model.generate() to generate prediction, make sure custmized conversation format in build_chat() is correct.
             prompt = build_chat(tokenizer, prompt, model_name)
-            pred = model_generate(tokenizer, prompt, max_gen, model)
+            if "llama3" in model_name or "Llama-3" in model_name or "LLaMA-3" in model_name or "llama-3" in model_name:
+                if "llama3" in model_name:
+                    model_name = model_name.replace("llama3", "llama-3")
+                conv = get_conversation_template(model_name)
+                stop_token_ids = conv.stop_token_ids
+            else:
+                stop_token_ids = None
+            pred = model_generate(tokenizer, prompt, max_gen, model, stop_token_ids=stop_token_ids)
 
         pred = post_process(pred, model_name)
 

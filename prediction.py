@@ -189,6 +189,7 @@ if __name__ == "__main__":
     ensure_dir(args.output_dir)
     datasets = get_dataset_names(DATASET_SELECTED, DATASET_LENGTH_LEVEL)
 
+    print(args)
     if args.single_process:
         single_processing(datasets, args)
     else:

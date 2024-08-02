@@ -28,10 +28,14 @@ def normalize_answer(s):
         exclude = set(string.punctuation)
         return "".join(ch for ch in text if ch not in exclude)
 
+    def remove_eos(text):
+        return text.replace("</s>", " ")
+
     def lower(text):
         return text.lower()
 
-    return white_space_fix(remove_articles(remove_punc(lower(s))))
+    # return white_space_fix(remove_articles(remove_punc(lower(s))))
+    return white_space_fix(remove_articles(remove_punc(lower(remove_eos(s)))))
 
 
 def normalize_zh_answer(s):
@@ -47,8 +51,12 @@ def normalize_zh_answer(s):
 
     def lower(text):
         return text.lower()
+    
+    def remove_eos(text):
+        return text.replace("</s>", " ")
 
-    return white_space_fix(remove_punc(lower(s)))
+    # return white_space_fix(remove_punc(lower(s)))
+    return white_space_fix(remove_punc(lower(remove_eos(s))))
     
 def rouge_score(prediction, ground_truth, gold_ans=None, **kwargs):
     rouge = Rouge()

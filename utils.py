@@ -11,9 +11,9 @@ from transformers import (
 from fastchat.model import get_conversation_template
 
 
-from playground.models.interface import update_model_function
-from playground.attention.set import set_static_attention_lut
-from playground.models.llama.modeling_llama import LlamaModel_use_streamingllm_attention
+from MoA.models.interface import update_model_function
+from MoA.attention.set import set_static_attention_lut
+from MoA.models.llama.modeling_llama import LlamaModel_use_streamingllm_attention
 
 
 def ensure_dir(directory_path):
@@ -102,17 +102,19 @@ def load_model_and_tokenizer(model_path, device, lut_path=None):
     model = AutoModelForCausalLM.from_pretrained(
         model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.float16, attn_implementation="eager" if lut_path is not None else "sdpa"
     )
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+    if model.generation_config.pad_token_id is None:
+        model.generation_config.pad_token_id = tokenizer.pad_token_id
 
-    model = update_model_function(model, model_path)
-    permute_head = True
-    sparse_decode = True
-    block_size = 64
     if lut_path is not None:
+        model = update_model_function(model, model_path)
+        permute_head = True
+        sparse_decode = True
+        block_size = 64
         model.model.use_block_sparse_attention_lut(permute_head, sparse_decode)
         print("Using lut from {}, block size {}".format(lut_path, block_size))
-        set_static_attention_lut(
-            lut_path, None, model.model.layers, block_size, permute_head, sparse_decode
-        )
+        set_static_attention_lut(lut_path, model_layers=model.model.layers, permute_head=permute_head, sparse_decode=sparse_decode)
 
     # LlamaModel_use_streamingllm_attention(model.model, global_size=4, band_size=4092, max_length=16384)
 

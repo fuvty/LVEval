@@ -2,18 +2,18 @@ model_path=$1
 model_name=$2
 model_max_len=$3
 output_dir=$4
-lut_path=$5
+moa_config=$5
 
 echo "output dir $output_dir"
 
-# decide whether lut_path is empty
-if [ -z "$lut_path" ]
+# decide whether moa_config is empty
+if [ -z "$moa_config" ]
 then
-    echo "lut_path is empty"
+    echo "moa_config is empty"
     cmd="python3 prediction.py --model-path $model_path --model-name $model_name --model-max-len $model_max_len --output-dir $output_dir --single-process"
 else
-    echo "lut_path is not empty"
-    cmd="python3 prediction.py --model-path $model_path --model-name $model_name --model-max-len $model_max_len --output-dir $output_dir --single-process --lut_path $lut_path"
+    echo "moa_config is not empty"
+    cmd="python3 prediction.py --model-path $model_path --model-name $model_name --model-max-len $model_max_len --output-dir $output_dir --single-process --moa_config $moa_config"
 fi
 
 echo $cmd

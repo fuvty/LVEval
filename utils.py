@@ -70,7 +70,7 @@ def load_LVEval_dataset(dataset_name, data_path=None):
         datas = load_dataset("infini-ai/LVEval", dataset_name, split='test', token=True)
     return list(datas)
 
-def load_model_and_tokenizer(model_path, device, lut_path=None):
+def load_model_and_tokenizer(model_path, device, moa_config=None):
     print(device)
     # try:
     #     tokenizer = AutoTokenizer.from_pretrained(
@@ -85,47 +85,46 @@ def load_model_and_tokenizer(model_path, device, lut_path=None):
     #         model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.bfloat16, use_flash_attention_2=False, 
     #     )
 
-    # check whether lut_path exists in the file system
-    if lut_path is not None and lut_path != '' and not os.path.exists(lut_path):
-        print(f"lut_path {lut_path} does not exist")
+    # check whether moa_config exists in the file system
+    if moa_config is not None and moa_config != '' and not os.path.exists(moa_config):
+        print(f"moa_config {moa_config} does not exist")
         raise FileNotFoundError
 
-    elif lut_path is None or lut_path == '':
-        print("lut_path is None, using raw model")
+    elif moa_config is None or moa_config == '':
+        print("moa_config is None, using raw model")
 
     else:
-        print(f"using lut_path {lut_path}")
+        print(f"using moa_config {moa_config}")
     
     tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=True
         )
     model = AutoModelForCausalLM.from_pretrained(
-        model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.float16, attn_implementation="eager" if lut_path is not None else "sdpa"
+        model_path, device_map=device, trust_remote_code=True, torch_dtype=torch.float16, attn_implementation="eager" if moa_config is not None else "sdpa"
     )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
     if model.generation_config.pad_token_id is None:
         model.generation_config.pad_token_id = tokenizer.pad_token_id
 
-    if lut_path is not None:
+    if moa_config is not None:
+        moa_config_path = moa_config
+        with open(moa_config_path, 'r') as f:
+            moa_config = json.load(f)
+        # Add mixture of sparse attention capability to the model
         model = update_model_function(model, model_path)
-        permute_head = True
-        sparse_decode = True
-        block_size = 64
-        model.model.use_block_sparse_attention_lut(permute_head, sparse_decode)
-        print("Using lut from {}, block size {}".format(lut_path, block_size))
-        set_static_attention_lut(lut_path, model_layers=model.model.layers, permute_head=permute_head, sparse_decode=sparse_decode)
+        model.model.set_mixture_of_attention(moa_config, permute_head=True)
 
     # LlamaModel_use_streamingllm_attention(model.model, global_size=4, band_size=4092, max_length=16384)
 
     model = model.eval()
     return model, tokenizer
 
-def load_model_and_tokenizer_once(id, model_path, device_dict=None, lock=None, lut_path=None):
+def load_model_and_tokenizer_once(id, model_path, device_dict=None, lock=None, moa_config=None):
     device = torch.device(f"cuda:{id}") if id != -1 else "auto"
     print(f"using device {device}")
     model, tokenizer = load_model_and_tokenizer(
-        model_path, device, lut_path
+        model_path, device, moa_config
     )
     if device_dict is None:
         return model, tokenizer

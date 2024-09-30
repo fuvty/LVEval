@@ -147,7 +147,7 @@ def multiple_processing(datasets, args):
         multiple_processing_once(num_gpus, dataset, shared_dict, device_dict, args)
 
 def single_processing(datasets, args):
-    model, tokenizer = load_model_and_tokenizer_once(-1, args.model_path, lut_path=args.lut_path)
+    model, tokenizer = load_model_and_tokenizer_once(-1, args.model_path, moa_config=args.moa_config)
     for dataset in tqdm(datasets):
         datas = load_LVEval_dataset(dataset, args.data_path)
         dataset_name = re.split('_.{1,3}k', dataset)[0]
@@ -172,7 +172,7 @@ def parse_args(args=None):
     parser.add_argument("--data-path", type=str, default=None)
     parser.add_argument("--output-dir", type=str, default="outputs")
     parser.add_argument("--single-process", action="store_true")
-    parser.add_argument("--lut_path", type=str, default=None)
+    parser.add_argument("--moa_config", type=str, default=None)
     return process_args(parser.parse_args(args))
 
 def process_args(args):
